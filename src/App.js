@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AuthProvider } from './contexts/AuthContext';
 import Homepage from './components/Homepage';
 import CoverLetterGenerator from './components/CoverLetterGenerator';
 import InterviewPrep from './components/InterviewPrep';
@@ -21,29 +22,31 @@ function App() {
   };
 
   return (
-    <div className="App">
-      {currentPage === 'homepage' && (
-        <Homepage onNavigate={navigateToPage} />
-      )}
-      {currentPage === 'cover-letter' && (
-        <CoverLetterGenerator onBack={goBackToHome} />
-      )}
-      {currentPage === 'interview-prep' && (
-        <InterviewPrep onBack={goBackToHome} />
-      )}
-      {currentPage === 'resume-builder' && (
-        <ResumeBuilder onBack={goBackToHome} />
-      )}
-      {currentPage === 'job-tracker' && (
-        <JobTracker onBack={goBackToHome} />
-      )}
-      {currentPage === 'salary-insights' && (
-        <SalaryInsights onBack={goBackToHome} />
-      )}
-      {currentPage === 'networking-tips' && (
-        <NetworkingTips onBack={goBackToHome} />
-      )}
-    </div>
+    <AuthProvider>
+      <div className="App">
+        {currentPage === 'homepage' && (
+          <Homepage onNavigate={navigateToPage} />
+        )}
+        {currentPage === 'cover-letter' && (
+          <CoverLetterGenerator onBack={goBackToHome} />
+        )}
+        {currentPage === 'interview-prep' && (
+          <InterviewPrep onBack={goBackToHome} />
+        )}
+        {currentPage === 'resume-builder' && (
+          <ResumeBuilder onBack={goBackToHome} />
+        )}
+        {currentPage === 'job-tracker' && (
+          <JobTracker onBack={goBackToHome} />
+        )}
+        {currentPage === 'salary-insights' && (
+          <SalaryInsights onBack={goBackToHome} />
+        )}
+        {currentPage === 'networking-tips' && (
+          <NetworkingTips onBack={goBackToHome} />
+        )}
+      </div>
+    </AuthProvider>
   );
 }
 
