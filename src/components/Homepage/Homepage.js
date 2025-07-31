@@ -1,7 +1,35 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import AuthModal from '../Auth/AuthModal';
 import './Homepage.css';
 
 function Homepage({ onNavigate }) {
+  const { user, isAuthenticated, logout } = useAuth();
+  const [authModal, setAuthModal] = useState({ isOpen: false, mode: 'login' });
+
+  const openAuthModal = (mode) => {
+    setAuthModal({ isOpen: true, mode });
+  };
+
+  const closeAuthModal = () => {
+    setAuthModal({ isOpen: false, mode: 'login' });
+  };
+
+  const switchAuthMode = () => {
+    setAuthModal(prev => ({
+      ...prev,
+      mode: prev.mode === 'login' ? 'signup' : 'login'
+    }));
+  };
+
+  const handleAuthSuccess = (userData) => {
+    // The login is handled by the AuthContext through the AuthModal
+    console.log('User logged in:', userData);
+  };
+
+  const handleLogout = () => {
+    logout();
+  };
   const menuItems = [
     {
       id: 'cover-letter',
@@ -55,6 +83,40 @@ function Homepage({ onNavigate }) {
 
   return (
     <div className="homepage">
+      {/* Authentication Header */}
+      <header className="auth-header">
+        <div className="auth-header-content">
+          <div className="logo">
+            <h3>Career Journey</h3>
+          </div>
+          <div className="auth-buttons">
+            {isAuthenticated ? (
+              <div className="user-menu">
+                <span className="welcome-text">Welcome, {user?.username}!</span>
+                <button onClick={handleLogout} className="logout-btn">
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <div className="login-signup-buttons">
+                <button 
+                  onClick={() => openAuthModal('login')} 
+                  className="login-btn"
+                >
+                  Sign In
+                </button>
+                <button 
+                  onClick={() => openAuthModal('signup')} 
+                  className="signup-btn"
+                >
+                  Sign Up
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
       {/* Hero Section */}
       <section className="hero-section">
         <div className="hero-content">
@@ -137,6 +199,15 @@ function Homepage({ onNavigate }) {
           </div>
         </div>
       </section>
+
+      {/* Authentication Modal */}
+      <AuthModal
+        isOpen={authModal.isOpen}
+        mode={authModal.mode}
+        onClose={closeAuthModal}
+        onSwitchMode={switchAuthMode}
+        onAuthSuccess={handleAuthSuccess}
+      />
     </div>
   );
 }
