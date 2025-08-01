@@ -1,177 +1,340 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import './SalaryInsights.css';
 
 function SalaryInsights({ onBack }) {
+  const { dataApi, isAuthenticated } = useAuth();
   const [activeSection, setActiveSection] = useState('search');
-  const [searchData, setSearchData] = useState({
+  const [formData, setFormData] = useState({
     jobTitle: '',
     location: '',
-    experience: '',
-    company: ''
+    experience: '1-3',
+    company: '',
+    skills: ''
   });
+  const [searchResults, setSearchResults] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
   const [savedSearches, setSavedSearches] = useState([]);
-  const [compareList, setCompareList] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [saveMessage, setSaveMessage] = useState('');
 
-  // Mock salary data - in real app this would come from an API
-  const salaryRanges = {
-    'software engineer': {
-      entry: { min: 70000, max: 95000, average: 82500 },
-      mid: { min: 95000, max: 130000, average: 112500 },
-      senior: { min: 130000, max: 180000, average: 155000 }
-    },
-    'product manager': {
-      entry: { min: 80000, max: 110000, average: 95000 },
-      mid: { min: 110000, max: 150000, average: 130000 },
-      senior: { min: 150000, max: 200000, average: 175000 }
-    },
-    'data scientist': {
-      entry: { min: 75000, max: 105000, average: 90000 },
-      mid: { min: 105000, max: 145000, average: 125000 },
-      senior: { min: 145000, max: 190000, average: 167500 }
-    },
-    'ux designer': {
-      entry: { min: 60000, max: 85000, average: 72500 },
-      mid: { min: 85000, max: 120000, average: 102500 },
-      senior: { min: 120000, max: 160000, average: 140000 }
-    },
-    'marketing manager': {
-      entry: { min: 55000, max: 75000, average: 65000 },
-      mid: { min: 75000, max: 110000, average: 92500 },
-      senior: { min: 110000, max: 150000, average: 130000 }
-    }
-  };
-
-  const locationMultipliers = {
-    'san francisco, ca': 1.4,
-    'new york, ny': 1.3,
-    'seattle, wa': 1.25,
-    'boston, ma': 1.2,
-    'los angeles, ca': 1.15,
-    'chicago, il': 1.05,
-    'austin, tx': 1.1,
-    'denver, co': 1.05,
-    'atlanta, ga': 0.95,
-    'phoenix, az': 0.9,
-    'remote': 1.0
-  };
-
-  const industryInsights = [
-    {
-      title: 'Tech Industry Trends',
-      icon: '💻',
-      insights: [
-        'Software engineering salaries have increased 15% year-over-year',
-        'Remote work options are now offered by 78% of tech companies',
-        'AI/ML roles command 20-30% salary premiums',
-        'Stock options are common in 85% of startup positions'
-      ]
-    },
-    {
-      title: 'Market Analysis',
-      icon: '📊',
-      insights: [
-        'Entry-level positions are most competitive in major cities',
-        'Mid-level professionals see the biggest salary jumps when switching companies',
-        'Senior roles often include significant equity compensation',
-        'Contract work rates are 25-40% higher than FTE salaries'
-      ]
-    },
-    {
-      title: 'Negotiation Tips',
-      icon: '💰',
-      insights: [
-        'Research total compensation, not just base salary',
-        'Know your market value before negotiations',
-        'Consider benefits, PTO, and work-life balance',
-        'Don\'t accept the first offer - negotiate respectfully'
-      ]
-    }
+  const experienceOptions = [
+    { value: '0-1', label: '0-1 years' },
+    { value: '1-3', label: '1-3 years' },
+    { value: '3-5', label: '3-5 years' },
+    { value: '5-10', label: '5-10 years' },
+    { value: '10+', label: '10+ years' }
   ];
 
-  // Load saved data
+  const jobCategories = [
+    'Software Engineer',
+    'Product Manager',
+    'Data Scientist',
+    'Marketing Manager',
+    'Sales Manager',
+    'UX Designer',
+    'Business Analyst',
+    'Project Manager',
+    'DevOps Engineer',
+    'Frontend Developer',
+    'Backend Developer',
+    'Full Stack Developer',
+    'Machine Learning Engineer',
+    'Security Engineer',
+    'Quality Assurance Engineer'
+  ];
+
+  const popularLocations = [
+    'San Francisco, CA',
+    'New York, NY',
+    'Seattle, WA',
+    'Austin, TX',
+    'Boston, MA',
+    'Los Angeles, CA',
+    'Chicago, IL',
+    'Denver, CO',
+    'Washington, DC',
+    'Atlanta, GA',
+    'Remote'
+  ];
+
+  // Load saved searches from API on component mount
   useEffect(() => {
+    const loadSavedSearches = async () => {
+      if (!isAuthenticated) {
+        // If not authenticated, try to load from localStorage as fallback
     const saved = localStorage.getItem('salarySearches');
     if (saved) {
       setSavedSearches(JSON.parse(saved));
     }
-  }, []);
+        return;
+      }
 
-  // Save searches
+      setIsLoading(true);
+      try {
+        const response = await dataApi.salarySearches.getAll();
+        if (response.searches) {
+          setSavedSearches(response.searches);
+        }
+      } catch (error) {
+        console.error('Error loading salary searches:', error);
+        setError('Failed to load your saved searches. You can still perform new searches.');
+        
+        // Fallback to localStorage
+        const saved = localStorage.getItem('salarySearches');
+        if (saved) {
+          setSavedSearches(JSON.parse(saved));
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadSavedSearches();
+  }, [isAuthenticated, dataApi]);
+
+  // Save searches to localStorage when not authenticated (as backup)
   useEffect(() => {
+    if (!isAuthenticated && savedSearches.length > 0) {
     localStorage.setItem('salarySearches', JSON.stringify(savedSearches));
-  }, [savedSearches]);
+    }
+  }, [savedSearches, isAuthenticated]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setSearchData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    
+    // Clear messages when user starts typing
+    if (saveMessage) setSaveMessage('');
+    if (error) setError('');
   };
 
-  const calculateSalary = () => {
-    const jobKey = searchData.jobTitle.toLowerCase();
-    const locationKey = searchData.location.toLowerCase();
-    const expLevel = searchData.experience;
+  const generateSalaryData = (jobTitle, location, experience) => {
+    // This is a mock salary calculation
+    // In a real app, you'd call an API like Glassdoor, PayScale, etc.
+    
+    const baseSalaries = {
+      'Software Engineer': { min: 80000, max: 150000 },
+      'Product Manager': { min: 100000, max: 180000 },
+      'Data Scientist': { min: 90000, max: 160000 },
+      'Marketing Manager': { min: 70000, max: 120000 },
+      'Sales Manager': { min: 60000, max: 140000 },
+      'UX Designer': { min: 70000, max: 130000 },
+      'Business Analyst': { min: 60000, max: 100000 },
+      'Project Manager': { min: 75000, max: 125000 },
+      'DevOps Engineer': { min: 85000, max: 155000 },
+      'Frontend Developer': { min: 70000, max: 140000 },
+      'Backend Developer': { min: 75000, max: 145000 },
+      'Full Stack Developer': { min: 80000, max: 150000 },
+      'Machine Learning Engineer': { min: 100000, max: 180000 },
+      'Security Engineer': { min: 90000, max: 170000 },
+      'Quality Assurance Engineer': { min: 60000, max: 110000 }
+    };
 
-    if (!salaryRanges[jobKey]) {
-      return null;
-    }
+    const locationMultipliers = {
+      'San Francisco, CA': 1.4,
+      'New York, NY': 1.3,
+      'Seattle, WA': 1.25,
+      'Austin, TX': 1.1,
+      'Boston, MA': 1.2,
+      'Los Angeles, CA': 1.15,
+      'Chicago, IL': 1.05,
+      'Denver, CO': 1.0,
+      'Washington, DC': 1.15,
+      'Atlanta, GA': 0.95,
+      'Remote': 1.1
+    };
 
-    const baseSalary = salaryRanges[jobKey][expLevel] || salaryRanges[jobKey]['mid'];
-    const locationMultiplier = locationMultipliers[locationKey] || 1.0;
+    const experienceMultipliers = {
+      '0-1': 0.8,
+      '1-3': 1.0,
+      '3-5': 1.2,
+      '5-10': 1.4,
+      '10+': 1.6
+    };
+
+    const baseRange = baseSalaries[jobTitle] || baseSalaries['Software Engineer'];
+    const locationMult = locationMultipliers[location] || 1.0;
+    const expMult = experienceMultipliers[experience] || 1.0;
+
+    const adjustedMin = Math.round(baseRange.min * locationMult * expMult);
+    const adjustedMax = Math.round(baseRange.max * locationMult * expMult);
+    const average = Math.round((adjustedMin + adjustedMax) / 2);
 
     return {
-      min: Math.round(baseSalary.min * locationMultiplier),
-      max: Math.round(baseSalary.max * locationMultiplier),
-      average: Math.round(baseSalary.average * locationMultiplier),
-      baseSalary,
-      locationMultiplier
+      jobTitle,
+      location,
+      experience,
+      salaryRange: {
+        min: adjustedMin,
+        max: adjustedMax,
+        average: average
+      },
+      marketData: {
+        percentile25: Math.round(adjustedMin * 1.1),
+        percentile50: average,
+        percentile75: Math.round(adjustedMax * 0.9),
+        totalCompensation: Math.round(average * 1.2)
+      },
+      insights: [
+        `${jobTitle} positions in ${location} typically pay ${((locationMult - 1) * 100).toFixed(0)}% ${locationMult > 1 ? 'above' : 'below'} the national average.`,
+        `With ${experience} years of experience, you can expect to earn ${((expMult - 1) * 100).toFixed(0)}% ${expMult > 1 ? 'more' : 'less'} than entry-level positions.`,
+        `The job market for ${jobTitle} is currently ${Math.random() > 0.5 ? 'strong' : 'competitive'} with ${Math.floor(Math.random() * 50 + 10)}% year-over-year growth.`,
+        `Total compensation including benefits typically ranges from ${Math.round(average * 1.1).toLocaleString()} to ${Math.round(average * 1.3).toLocaleString()}.`
+      ],
+      searchDate: new Date().toISOString()
     };
   };
 
-  const saveSalarySearch = () => {
-    const result = calculateSalary();
-    if (result && searchData.jobTitle && searchData.location) {
-      const newSearch = {
-        id: Date.now(),
-        ...searchData,
-        result,
-        date: new Date().toISOString()
-      };
-      setSavedSearches(prev => [newSearch, ...prev.slice(0, 9)]); // Keep last 10
+  const handleSearch = async () => {
+    if (!formData.jobTitle.trim() || !formData.location.trim()) {
+      setError('Please enter both job title and location.');
+      return;
+    }
+
+    setIsSearching(true);
+    setError('');
+
+    try {
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      const results = generateSalaryData(
+        formData.jobTitle,
+        formData.location,
+        formData.experience
+      );
+
+      setSearchResults(results);
+      setActiveSection('results');
+    } catch (error) {
+      setError('Failed to search salary data. Please try again.');
+    } finally {
+      setIsSearching(false);
     }
   };
 
-  const addToCompare = (search) => {
-    if (compareList.length < 3 && !compareList.find(item => item.id === search.id)) {
-      setCompareList(prev => [...prev, search]);
+  const saveSearch = async () => {
+    if (!searchResults) {
+      setError('No search results to save.');
+      return;
+    }
+
+    const searchToSave = {
+      ...searchResults,
+      company: formData.company,
+      skills: formData.skills,
+      savedDate: new Date().toISOString()
+    };
+
+    if (!isAuthenticated) {
+      // Fallback to localStorage for non-authenticated users
+      const updated = [searchToSave, ...savedSearches].slice(0, 20);
+      setSavedSearches(updated);
+      localStorage.setItem('salarySearches', JSON.stringify(updated));
+      setSaveMessage('✅ Search saved locally!');
+      setTimeout(() => setSaveMessage(''), 3000);
+      return;
+    }
+
+    setIsSaving(true);
+    setError('');
+
+    try {
+      await dataApi.salarySearches.save(searchToSave);
+      
+      // Update local state
+      const updated = [searchToSave, ...savedSearches].slice(0, 20);
+      setSavedSearches(updated);
+      
+      setSaveMessage('✅ Search saved successfully!');
+      
+      // Clear message after 3 seconds
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (error) {
+      console.error('Error saving salary search:', error);
+      setError(`Failed to save search: ${error.message}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const removeFromCompare = (id) => {
-    setCompareList(prev => prev.filter(item => item.id !== id));
+  const clearHistory = () => {
+    if (window.confirm('Are you sure you want to clear all saved searches? This cannot be undone.')) {
+      setSavedSearches([]);
+      localStorage.removeItem('salarySearches');
+      setSaveMessage('✅ Search history cleared successfully!');
+      setTimeout(() => setSaveMessage(''), 3000);
+    }
   };
 
-  const clearSavedSearches = () => {
-    setSavedSearches([]);
-    localStorage.removeItem('salarySearches');
+  const formatSalary = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
   };
 
-  const salaryResult = calculateSalary();
+  if (isLoading) {
+    return (
+      <div className="salary-insights">
+        <div className="loading-container">
+          <div className="loading-spinner"></div>
+          <p>Loading your saved searches...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="salary-insights">
-      <header className="App-header">
+      <header className="insights-header">
         <div className="header-content">
-          <button className="back-button" onClick={onBack}>
-            ← Back to Home
+          <button onClick={onBack} className="back-button">
+            ← Back to Dashboard
           </button>
-          <div className="header-text">
+          <div className="header-title">
             <h1>💰 Salary Insights</h1>
-            <p>Research salary ranges and negotiate with confidence</p>
+            <p>Research competitive salaries and negotiate with confidence</p>
+          </div>
+          <div className="header-actions">
+            <button 
+              onClick={() => setActiveSection('history')} 
+              className="history-btn"
+            >
+              📊 Saved Searches ({savedSearches.length})
+            </button>
           </div>
         </div>
       </header>
 
-      <div className="tab-navigation">
+      {/* Status Messages */}
+      {saveMessage && (
+        <div className="status-message success">
+          {saveMessage}
+        </div>
+      )}
+      
+      {error && (
+        <div className="status-message error">
+          ⚠️ {error}
+        </div>
+      )}
+
+      {!isAuthenticated && (
+        <div className="status-message warning">
+          ⚠️ You're not logged in. Your searches will only be saved locally and may be lost. Please log in to save permanently.
+        </div>
+      )}
+
+      <div className="insights-tabs">
         <button 
           className={`tab-button ${activeSection === 'search' ? 'active' : ''}`}
           onClick={() => setActiveSection('search')}
@@ -179,305 +342,295 @@ function SalaryInsights({ onBack }) {
           🔍 Salary Search
         </button>
         <button 
-          className={`tab-button ${activeSection === 'compare' ? 'active' : ''}`}
-          onClick={() => setActiveSection('compare')}
+          className={`tab-button ${activeSection === 'results' ? 'active' : ''}`}
+          onClick={() => setActiveSection('results')}
+          disabled={!searchResults}
         >
-          ⚖️ Compare ({compareList.length})
-        </button>
-        <button 
-          className={`tab-button ${activeSection === 'insights' ? 'active' : ''}`}
-          onClick={() => setActiveSection('insights')}
-        >
-          📈 Market Insights
+          📈 Results
         </button>
         <button 
           className={`tab-button ${activeSection === 'history' ? 'active' : ''}`}
           onClick={() => setActiveSection('history')}
         >
-          📚 Search History
+          💾 Saved Searches
         </button>
       </div>
 
-      <main className="main-content">
-        {/* Salary Search Section */}
+      {/* Search Section */}
         {activeSection === 'search' && (
-          <div className="search-container">
+        <div className="search-section">
             <div className="search-form">
-              <h2>Research Salary Ranges</h2>
+            <h2>🔍 Search Salary Information</h2>
+            <p>Enter your job details to get comprehensive salary insights</p>
+
               <div className="form-grid">
                 <div className="form-group">
-                  <label>Job Title *</label>
-                  <select
+                <label htmlFor="jobTitle">Job Title *</label>
+                <input
+                  type="text"
+                  id="jobTitle"
                     name="jobTitle"
-                    value={searchData.jobTitle}
+                  value={formData.jobTitle}
                     onChange={handleInputChange}
-                  >
-                    <option value="">Select a job title</option>
-                    <option value="software engineer">Software Engineer</option>
-                    <option value="product manager">Product Manager</option>
-                    <option value="data scientist">Data Scientist</option>
-                    <option value="ux designer">UX Designer</option>
-                    <option value="marketing manager">Marketing Manager</option>
-                  </select>
+                  placeholder="e.g., Software Engineer"
+                  list="job-categories"
+                />
+                <datalist id="job-categories">
+                  {jobCategories.map(job => (
+                    <option key={job} value={job} />
+                  ))}
+                </datalist>
                 </div>
 
                 <div className="form-group">
-                  <label>Location *</label>
-                  <select
+                <label htmlFor="location">Location *</label>
+                <input
+                  type="text"
+                  id="location"
                     name="location"
-                    value={searchData.location}
+                  value={formData.location}
                     onChange={handleInputChange}
-                  >
-                    <option value="">Select a location</option>
-                    <option value="san francisco, ca">San Francisco, CA</option>
-                    <option value="new york, ny">New York, NY</option>
-                    <option value="seattle, wa">Seattle, WA</option>
-                    <option value="boston, ma">Boston, MA</option>
-                    <option value="los angeles, ca">Los Angeles, CA</option>
-                    <option value="chicago, il">Chicago, IL</option>
-                    <option value="austin, tx">Austin, TX</option>
-                    <option value="denver, co">Denver, CO</option>
-                    <option value="atlanta, ga">Atlanta, GA</option>
-                    <option value="phoenix, az">Phoenix, AZ</option>
-                    <option value="remote">Remote</option>
-                  </select>
+                  placeholder="e.g., San Francisco, CA"
+                  list="popular-locations"
+                />
+                <datalist id="popular-locations">
+                  {popularLocations.map(location => (
+                    <option key={location} value={location} />
+                  ))}
+                </datalist>
                 </div>
 
                 <div className="form-group">
-                  <label>Experience Level *</label>
+                <label htmlFor="experience">Years of Experience</label>
                   <select
+                  id="experience"
                     name="experience"
-                    value={searchData.experience}
+                  value={formData.experience}
                     onChange={handleInputChange}
                   >
-                    <option value="">Select experience level</option>
-                    <option value="entry">Entry Level (0-2 years)</option>
-                    <option value="mid">Mid Level (3-7 years)</option>
-                    <option value="senior">Senior Level (8+ years)</option>
+                  {experienceOptions.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                   </select>
                 </div>
 
                 <div className="form-group">
-                  <label>Company (Optional)</label>
+                <label htmlFor="company">Company (Optional)</label>
                   <input
                     type="text"
+                  id="company"
                     name="company"
-                    value={searchData.company}
+                  value={formData.company}
                     onChange={handleInputChange}
                     placeholder="e.g., Google, Microsoft"
                   />
                 </div>
+
+              <div className="form-group full-width">
+                <label htmlFor="skills">Key Skills (Optional)</label>
+                <input
+                  type="text"
+                  id="skills"
+                  name="skills"
+                  value={formData.skills}
+                  onChange={handleInputChange}
+                  placeholder="e.g., React, Python, Leadership, etc."
+                />
               </div>
             </div>
 
-            {/* Salary Results */}
-            {salaryResult && (
-              <div className="salary-results">
-                <div className="results-header">
-                  <h3>Salary Range for {searchData.jobTitle} in {searchData.location}</h3>
-                  <button className="btn-primary" onClick={saveSalarySearch}>
-                    💾 Save Search
+            <button 
+              onClick={handleSearch}
+              className="search-btn"
+              disabled={isSearching || !formData.jobTitle.trim() || !formData.location.trim()}
+            >
+              {isSearching ? '🔍 Searching...' : '🔍 Search Salaries'}
                   </button>
                 </div>
 
-                <div className="salary-cards">
-                  <div className="salary-card minimum">
-                    <div className="salary-label">Minimum</div>
-                    <div className="salary-amount">${salaryResult.min.toLocaleString()}</div>
-                    <div className="salary-subtitle">25th Percentile</div>
+          <div className="tips-section">
+            <h3>💡 Salary Research Tips</h3>
+            <div className="tips-grid">
+              <div className="tip-card">
+                <h4>📊 Multiple Sources</h4>
+                <p>Check multiple sources like Glassdoor, PayScale, and LinkedIn for comprehensive data.</p>
+              </div>
+              <div className="tip-card">
+                <h4>🌍 Location Matters</h4>
+                <p>Salaries vary significantly by location. Consider cost of living adjustments.</p>
+              </div>
+              <div className="tip-card">
+                <h4>📈 Total Compensation</h4>
+                <p>Consider benefits, equity, bonuses, and other perks beyond base salary.</p>
+              </div>
+              <div className="tip-card">
+                <h4>🎯 Negotiate Smartly</h4>
+                <p>Use data to support your negotiation, but also consider company size and budget.</p>
+              </div>
+            </div>
+          </div>
+                  </div>
+      )}
+
+      {/* Results Section */}
+      {activeSection === 'results' && searchResults && (
+        <div className="results-section">
+          <div className="results-header">
+            <div className="search-info">
+              <h2>📈 Salary Results</h2>
+              <p>{searchResults.jobTitle} • {searchResults.location} • {searchResults.experience} years</p>
+            </div>
+            <button 
+              onClick={saveSearch}
+              className="save-search-btn"
+              disabled={isSaving}
+            >
+              {isSaving ? '💾 Saving...' : '💾 Save Search'}
+            </button>
                   </div>
 
-                  <div className="salary-card average">
-                    <div className="salary-label">Average</div>
-                    <div className="salary-amount">${salaryResult.average.toLocaleString()}</div>
-                    <div className="salary-subtitle">Market Average</div>
-                  </div>
-
-                  <div className="salary-card maximum">
-                    <div className="salary-label">Maximum</div>
-                    <div className="salary-amount">${salaryResult.max.toLocaleString()}</div>
-                    <div className="salary-subtitle">75th Percentile</div>
+          <div className="salary-overview">
+            <div className="salary-card main">
+              <h3>Average Salary</h3>
+              <div className="salary-amount">{formatSalary(searchResults.salaryRange.average)}</div>
+              <div className="salary-range">
+                Range: {formatSalary(searchResults.salaryRange.min)} - {formatSalary(searchResults.salaryRange.max)}
                   </div>
                 </div>
 
                 <div className="salary-breakdown">
-                  <h4>Breakdown</h4>
                   <div className="breakdown-item">
-                    <span>Base salary range:</span>
-                    <span>${salaryResult.baseSalary.min.toLocaleString()} - ${salaryResult.baseSalary.max.toLocaleString()}</span>
+                <span className="label">25th Percentile</span>
+                <span className="value">{formatSalary(searchResults.marketData.percentile25)}</span>
                   </div>
                   <div className="breakdown-item">
-                    <span>Location adjustment:</span>
-                    <span>{salaryResult.locationMultiplier}x ({searchData.location})</span>
+                <span className="label">50th Percentile (Median)</span>
+                <span className="value">{formatSalary(searchResults.marketData.percentile50)}</span>
                   </div>
                   <div className="breakdown-item">
-                    <span>Experience level:</span>
-                    <span>{searchData.experience} level</span>
-                  </div>
-                </div>
+                <span className="label">75th Percentile</span>
+                <span className="value">{formatSalary(searchResults.marketData.percentile75)}</span>
               </div>
-            )}
-          </div>
-        )}
-
-        {/* Compare Section */}
-        {activeSection === 'compare' && (
-          <div className="compare-container">
-            <div className="section-header">
-              <h2>Salary Comparison</h2>
-              <p>Compare up to 3 salary searches side by side</p>
-            </div>
-
-            {compareList.length === 0 ? (
-              <div className="empty-state">
-                <h3>No Searches to Compare</h3>
-                <p>Save some salary searches and add them to comparison to see differences.</p>
+              <div className="breakdown-item">
+                <span className="label">Total Compensation</span>
+                <span className="value">{formatSalary(searchResults.marketData.totalCompensation)}</span>
               </div>
-            ) : (
-              <div className="compare-grid">
-                {compareList.map((search) => (
-                  <div key={search.id} className="compare-card">
-                    <div className="compare-header">
-                      <h3>{search.jobTitle}</h3>
-                      <button 
-                        className="remove-btn"
-                        onClick={() => removeFromCompare(search.id)}
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <div className="compare-details">
-                      <p><strong>Location:</strong> {search.location}</p>
-                      <p><strong>Experience:</strong> {search.experience}</p>
-                      <div className="compare-salary">
-                        <div className="salary-range">
-                          ${search.result.min.toLocaleString()} - ${search.result.max.toLocaleString()}
-                        </div>
-                        <div className="salary-avg">
-                          Avg: ${search.result.average.toLocaleString()}
                         </div>
                       </div>
-                    </div>
+
+          <div className="insights-grid">
+            <div className="insights-card">
+              <h3>💡 Market Insights</h3>
+              <div className="insights-list">
+                {searchResults.insights.map((insight, index) => (
+                  <div key={index} className="insight-item">
+                    <span className="insight-bullet">•</span>
+                    <span className="insight-text">{insight}</span>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-        )}
-
-        {/* Market Insights Section */}
-        {activeSection === 'insights' && (
-          <div className="insights-container">
-            <div className="section-header">
-              <h2>Market Insights & Trends</h2>
-              <p>Stay informed about salary trends and negotiation strategies</p>
             </div>
 
-            <div className="insights-grid">
-              {industryInsights.map((insight, index) => (
-                <div key={index} className="insight-card">
-                  <div className="insight-header">
-                    <span className="insight-icon">{insight.icon}</span>
-                    <h3>{insight.title}</h3>
-                  </div>
-                  <ul className="insight-list">
-                    {insight.insights.map((item, idx) => (
-                      <li key={idx}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-
-            <div className="negotiation-guide">
-              <h3>💡 Salary Negotiation Guide</h3>
-              <div className="guide-steps">
-                <div className="step">
-                  <div className="step-number">1</div>
-                  <div className="step-content">
-                    <h4>Research Market Rates</h4>
-                    <p>Use tools like this to understand industry standards for your role and location.</p>
-                  </div>
-                </div>
-                <div className="step">
-                  <div className="step-number">2</div>
-                  <div className="step-content">
-                    <h4>Document Your Value</h4>
-                    <p>List your achievements, skills, and contributions that justify higher compensation.</p>
-                  </div>
-                </div>
-                <div className="step">
-                  <div className="step-number">3</div>
-                  <div className="step-content">
-                    <h4>Practice Your Pitch</h4>
-                    <p>Rehearse your negotiation conversation and prepare for common responses.</p>
-                  </div>
-                </div>
-                <div className="step">
-                  <div className="step-number">4</div>
-                  <div className="step-content">
-                    <h4>Negotiate Total Package</h4>
-                    <p>Consider base salary, bonuses, benefits, PTO, and growth opportunities.</p>
-                  </div>
-                </div>
+            <div className="actions-card">
+              <h3>🎯 Next Steps</h3>
+              <div className="action-buttons">
+                <button onClick={() => setActiveSection('search')} className="action-btn">
+                  🔍 Search Again
+                </button>
+                <button onClick={() => setActiveSection('history')} className="action-btn">
+                  📊 View History
+                </button>
+              </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Search History Section */}
+      {/* History Section */}
         {activeSection === 'history' && (
-          <div className="history-container">
-            <div className="section-header">
-              <h2>Search History</h2>
-              <div className="header-actions">
-                <p>{savedSearches.length} saved searches</p>
+        <div className="history-section">
+          <div className="history-header">
+            <h2>💾 Saved Searches</h2>
+            <div className="history-actions">
                 {savedSearches.length > 0 && (
-                  <button className="btn-secondary" onClick={clearSavedSearches}>
+                <button onClick={clearHistory} className="clear-history-btn">
                     🗑️ Clear History
                   </button>
                 )}
               </div>
             </div>
 
+          <div className="history-list">
             {savedSearches.length === 0 ? (
-              <div className="empty-state">
-                <h3>No Search History</h3>
-                <p>Your saved salary searches will appear here.</p>
+              <div className="no-history">
+                <div className="no-history-icon">💰</div>
+                <h3>No Saved Searches</h3>
+                <p>Start searching for salary information to build your research history.</p>
+                <button onClick={() => setActiveSection('search')} className="start-searching-btn">
+                  🔍 Start Searching
+                </button>
               </div>
             ) : (
-              <div className="history-list">
-                {savedSearches.map((search) => (
-                  <div key={search.id} className="history-item">
-                    <div className="history-header">
-                      <div className="history-title">
+              <div className="history-items">
+                {savedSearches.map((search, index) => (
+                  <div key={index} className="history-item">
+                    <div className="search-header">
+                      <div className="search-title">
                         <h3>{search.jobTitle}</h3>
-                        <p>{search.location} • {search.experience} level</p>
+                        <p>{search.location} • {search.experience} years</p>
                       </div>
-                      <div className="history-actions">
-                        <div className="salary-display">
-                          ${search.result.average.toLocaleString()} avg
-                        </div>
-                        <button 
-                          className="btn-compare"
-                          onClick={() => addToCompare(search)}
-                          disabled={compareList.length >= 3 || compareList.find(item => item.id === search.id)}
-                        >
-                          + Compare
-                        </button>
+                      <div className="search-salary">
+                        <span className="average-salary">{formatSalary(search.salaryRange.average)}</span>
+                        <span className="salary-range">
+                          {formatSalary(search.salaryRange.min)} - {formatSalary(search.salaryRange.max)}
+                        </span>
                       </div>
                     </div>
-                    <div className="history-details">
-                      <span>Range: ${search.result.min.toLocaleString()} - ${search.result.max.toLocaleString()}</span>
-                      <span>Searched: {new Date(search.date).toLocaleDateString()}</span>
+
+                    <div className="search-details">
+                      {search.company && (
+                        <div className="detail-item">
+                          <span className="label">Company:</span>
+                          <span className="value">{search.company}</span>
+                        </div>
+                      )}
+                      {search.skills && (
+                        <div className="detail-item">
+                          <span className="label">Skills:</span>
+                          <span className="value">{search.skills}</span>
+                        </div>
+                      )}
+                      <div className="detail-item">
+                        <span className="label">Searched:</span>
+                        <span className="value">
+                          {new Date(search.savedDate).toLocaleDateString()} at {new Date(search.savedDate).toLocaleTimeString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="market-data">
+                      <div className="data-item">
+                        <span className="data-label">Median</span>
+                        <span className="data-value">{formatSalary(search.marketData.percentile50)}</span>
+                      </div>
+                      <div className="data-item">
+                        <span className="data-label">75th %ile</span>
+                        <span className="data-value">{formatSalary(search.marketData.percentile75)}</span>
+                      </div>
+                      <div className="data-item">
+                        <span className="data-label">Total Comp</span>
+                        <span className="data-value">{formatSalary(search.marketData.totalCompensation)}</span>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
+          </div>
         )}
-      </main>
     </div>
   );
 }

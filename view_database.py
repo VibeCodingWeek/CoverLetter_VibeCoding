@@ -6,7 +6,7 @@ def view_database():
     """View all data in the users database"""
     try:
         # Connect to database
-        conn = sqlite3.connect('users.db')
+        conn = sqlite3.connect('backend/users.db')  # Fixed: Point to the correct database
         conn.row_factory = sqlite3.Row  # This allows us to access columns by name
         cursor = conn.cursor()
         

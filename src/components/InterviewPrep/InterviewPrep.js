@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import './InterviewPrep.css';
 
 function InterviewPrep({ onBack }) {
+  const { dataApi, isAuthenticated } = useAuth();
   const [activeSection, setActiveSection] = useState('categories');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -9,6 +11,10 @@ function InterviewPrep({ onBack }) {
   const [timer, setTimer] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [practiceHistory, setPracticeHistory] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [saveMessage, setSaveMessage] = useState('');
 
   // Interview question database
   const questionCategories = {
@@ -48,76 +54,85 @@ function InterviewPrep({ onBack }) {
         "How do you prioritize technical debt versus new feature development?"
       ]
     },
-    general: {
-      name: "General Questions",
-      icon: "💼",
+    situational: {
+      name: "Situational Questions",
+      icon: "🎯",
       color: "gradient-purple",
-      description: "Common questions about your background, goals, and motivation",
+      description: "Hypothetical scenarios to assess your decision-making skills",
       questions: [
-        "Tell me about yourself.",
-        "Why are you interested in this position?",
-        "What are your greatest strengths?",
-        "What is your biggest weakness?",
-        "Where do you see yourself in 5 years?",
-        "Why are you leaving your current job?",
-        "What motivates you at work?",
-        "How do you handle stress and pressure?",
-        "What are you looking for in your next role?",
-        "Do you have any questions for us?"
+        "What would you do if you disagreed with your manager's decision?",
+        "How would you handle a situation where you have multiple urgent deadlines?",
+        "What would you do if you discovered a mistake in your work after it was submitted?",
+        "How would you approach a project with unclear requirements?",
+        "What would you do if a team member wasn't contributing to a group project?",
+        "How would you handle receiving negative feedback from a client?",
+        "What would you do if you were asked to do something outside your job description?",
+        "How would you prioritize tasks when everything seems urgent?",
+        "What would you do if you realized you couldn't meet a promised deadline?",
+        "How would you handle a conflict between two team members?"
       ]
     },
     company: {
-      name: "Company-Specific",
+      name: "Company-Specific Questions",
       icon: "🏢",
       color: "gradient-orange",
-      description: "Questions to help you prepare for specific company research",
+      description: "Questions about the company, role, and your motivation",
       questions: [
-        "What do you know about our company?",
-        "Why do you want to work for us specifically?",
-        "How do you think you can contribute to our team?",
-        "What interests you most about our industry?",
+        "Why do you want to work for our company?",
+        "What do you know about our products/services?",
         "How do your values align with our company culture?",
+        "Where do you see yourself in 5 years?",
+        "Why are you leaving your current job?",
+        "What interests you most about this role?",
+        "How would you contribute to our team?",
         "What do you think are the biggest challenges facing our industry?",
-        "How would you improve our product/service?",
-        "What do you think sets us apart from our competitors?",
-        "How do you see this role fitting into our organization?",
-        "What questions do you have about our company culture?"
+        "Why should we hire you over other candidates?",
+        "What questions do you have for us?"
       ]
     }
   };
 
-  const interviewTips = [
-    {
-      title: "STAR Method",
-      description: "Use Situation, Task, Action, Result to structure behavioral answers",
-      icon: "⭐"
-    },
-    {
-      title: "Research the Company",
-      description: "Know their mission, values, recent news, and competitors",
-      icon: "🔍"
-    },
-    {
-      title: "Prepare Questions",
-      description: "Have thoughtful questions ready about the role and company",
-      icon: "❓"
-    },
-    {
-      title: "Practice Out Loud",
-      description: "Practice speaking your answers, not just thinking them",
-      icon: "🗣️"
-    },
-    {
-      title: "Body Language",
-      description: "Maintain eye contact, sit up straight, and show enthusiasm",
-      icon: "🤝"
-    },
-    {
-      title: "Follow Up",
-      description: "Send a thank-you email within 24 hours",
-      icon: "📧"
+  // Load practice history from API on component mount
+  useEffect(() => {
+    const loadPracticeHistory = async () => {
+      if (!isAuthenticated) {
+        // If not authenticated, try to load from localStorage as fallback
+        const saved = localStorage.getItem('interviewPracticeHistory');
+        if (saved) {
+          setPracticeHistory(JSON.parse(saved));
+        }
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const response = await dataApi.interviewPractice.getHistory();
+        if (response.history) {
+          setPracticeHistory(response.history);
+        }
+      } catch (error) {
+        console.error('Error loading practice history:', error);
+        setError('Failed to load your practice history. You can still practice questions.');
+        
+        // Fallback to localStorage
+        const saved = localStorage.getItem('interviewPracticeHistory');
+        if (saved) {
+          setPracticeHistory(JSON.parse(saved));
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadPracticeHistory();
+  }, [isAuthenticated, dataApi]);
+
+  // Save practice history to localStorage when not authenticated (as backup)
+  useEffect(() => {
+    if (!isAuthenticated && practiceHistory.length > 0) {
+      localStorage.setItem('interviewPracticeHistory', JSON.stringify(practiceHistory));
     }
-  ];
+  }, [practiceHistory, isAuthenticated]);
 
   // Timer effect
   useEffect(() => {
@@ -132,18 +147,10 @@ function InterviewPrep({ onBack }) {
     return () => clearInterval(interval);
   }, [isTimerRunning, timer]);
 
-  // Load practice history from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('interviewPracticeHistory');
-    if (saved) {
-      setPracticeHistory(JSON.parse(saved));
-    }
-  }, []);
-
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const startTimer = () => {
@@ -162,273 +169,382 @@ function InterviewPrep({ onBack }) {
   const selectCategory = (categoryKey) => {
     setSelectedCategory(categoryKey);
     setCurrentQuestionIndex(0);
-    setUserAnswer('');
     setActiveSection('practice');
+    setUserAnswer('');
     resetTimer();
   };
 
   const nextQuestion = () => {
-    const questions = questionCategories[selectedCategory].questions;
-    if (currentQuestionIndex < questions.length - 1) {
-      saveCurrentPractice();
+    const category = questionCategories[selectedCategory];
+    if (currentQuestionIndex < category.questions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
       setUserAnswer('');
       resetTimer();
     }
   };
 
-  const previousQuestion = () => {
+  const prevQuestion = () => {
     if (currentQuestionIndex > 0) {
-      saveCurrentPractice();
       setCurrentQuestionIndex(currentQuestionIndex - 1);
       setUserAnswer('');
       resetTimer();
     }
   };
 
-  const saveCurrentPractice = () => {
-    if (userAnswer.trim() && selectedCategory) {
-      const practice = {
-        id: Date.now(),
-        category: selectedCategory,
-        question: questionCategories[selectedCategory].questions[currentQuestionIndex],
-        answer: userAnswer,
-        timeSpent: timer,
-        date: new Date().toLocaleDateString()
-      };
-      
-      const updated = [practice, ...practiceHistory].slice(0, 50); // Keep last 50 practices
+  const saveAnswer = async () => {
+    if (!userAnswer.trim()) {
+      setError('Please enter an answer before saving.');
+      return;
+    }
+
+    const practice = {
+      category: selectedCategory,
+      question: questionCategories[selectedCategory].questions[currentQuestionIndex],
+      userAnswer: userAnswer,
+      timeTaken: timer,
+      sessionDate: new Date().toISOString()
+    };
+
+    if (!isAuthenticated) {
+      // Fallback to localStorage for non-authenticated users
+      const updated = [practice, ...practiceHistory].slice(0, 50);
       setPracticeHistory(updated);
       localStorage.setItem('interviewPracticeHistory', JSON.stringify(updated));
+      setSaveMessage('✅ Practice session saved locally!');
+      setTimeout(() => setSaveMessage(''), 3000);
+      return;
+    }
+
+    setIsSaving(true);
+    setError('');
+
+    try {
+      await dataApi.interviewPractice.saveSession(practice);
+      
+      // Update local state
+      const updated = [practice, ...practiceHistory].slice(0, 50);
+      setPracticeHistory(updated);
+      
+      setSaveMessage('✅ Practice session saved successfully!');
+      
+      // Clear message after 3 seconds
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (error) {
+      console.error('Error saving practice session:', error);
+      setError(`Failed to save practice session: ${error.message}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const clearHistory = () => {
-    setPracticeHistory([]);
-    localStorage.removeItem('interviewPracticeHistory');
+    if (window.confirm('Are you sure you want to clear all practice history? This cannot be undone.')) {
+      setPracticeHistory([]);
+      localStorage.removeItem('interviewPracticeHistory');
+      setSaveMessage('✅ Practice history cleared successfully!');
+      setTimeout(() => setSaveMessage(''), 3000);
+    }
   };
 
-  const getCurrentQuestion = () => {
-    if (!selectedCategory) return '';
-    return questionCategories[selectedCategory].questions[currentQuestionIndex];
+  const goBackToCategories = () => {
+    setActiveSection('categories');
+    setSelectedCategory(null);
+    setUserAnswer('');
+    resetTimer();
+    setError('');
   };
 
-  const getCurrentCategory = () => {
-    if (!selectedCategory) return null;
-    return questionCategories[selectedCategory];
-  };
+  if (isLoading) {
+    return (
+      <div className="interview-prep">
+        <div className="loading-container">
+          <div className="loading-spinner"></div>
+          <p>Loading your practice history...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="interview-prep">
-      <header className="App-header">
+      <header className="prep-header">
         <div className="header-content">
-          <button className="back-button" onClick={onBack}>
-            ← Back to Home
+          <button onClick={onBack} className="back-button">
+            ← Back to Dashboard
           </button>
-          <div className="header-text">
-            <h1>🎯 Interview Prep</h1>
-            <p>Practice common interview questions and ace your next interview</p>
+          <div className="header-title">
+            <h1>🎤 Interview Preparation</h1>
+            <p>Practice common interview questions and build confidence</p>
+          </div>
+          <div className="header-actions">
+            <button 
+              onClick={() => setActiveSection('history')} 
+              className="history-btn"
+            >
+              📊 View History ({practiceHistory.length})
+            </button>
           </div>
         </div>
       </header>
 
-      <div className="tab-navigation">
+      {/* Status Messages */}
+      {saveMessage && (
+        <div className="status-message success">
+          {saveMessage}
+        </div>
+      )}
+      
+      {error && (
+        <div className="status-message error">
+          ⚠️ {error}
+        </div>
+      )}
+
+      {!isAuthenticated && (
+        <div className="status-message warning">
+          ⚠️ You're not logged in. Your practice sessions will only be saved locally and may be lost. Please log in to save permanently.
+        </div>
+      )}
+
+      <div className="prep-tabs">
         <button 
           className={`tab-button ${activeSection === 'categories' ? 'active' : ''}`}
           onClick={() => setActiveSection('categories')}
         >
-          📚 Question Categories
+          📝 Question Categories
         </button>
         <button 
           className={`tab-button ${activeSection === 'practice' ? 'active' : ''}`}
           onClick={() => setActiveSection('practice')}
           disabled={!selectedCategory}
         >
-          🎤 Practice Session
-        </button>
-        <button 
-          className={`tab-button ${activeSection === 'tips' ? 'active' : ''}`}
-          onClick={() => setActiveSection('tips')}
-        >
-          💡 Interview Tips
+          🎯 Practice Session
         </button>
         <button 
           className={`tab-button ${activeSection === 'history' ? 'active' : ''}`}
           onClick={() => setActiveSection('history')}
         >
-          📈 Practice History
+          📊 Practice History
         </button>
       </div>
 
-      <main className="main-content">
-        {/* Categories Section */}
-        {activeSection === 'categories' && (
-          <div className="categories-container">
-            <div className="section-header">
-              <h2>Choose a Question Category</h2>
-              <p>Select a category to start practicing interview questions</p>
-            </div>
-            
-            <div className="categories-grid">
-              {Object.entries(questionCategories).map(([key, category]) => (
-                <div 
-                  key={key}
-                  className={`category-card ${category.color}`}
-                  onClick={() => selectCategory(key)}
-                >
-                  <div className="card-content">
-                    <div className="card-icon">
-                      <span>{category.icon}</span>
-                    </div>
-                    <h3 className="card-title">{category.name}</h3>
-                    <p className="card-description">{category.description}</p>
-                    <div className="question-count">
+      {/* Categories Section */}
+      {activeSection === 'categories' && (
+        <div className="categories-section">
+          <div className="categories-grid">
+            {Object.entries(questionCategories).map(([key, category]) => (
+              <div 
+                key={key} 
+                className={`category-card ${category.color}`}
+                onClick={() => selectCategory(key)}
+              >
+                <div className="category-icon">{category.icon}</div>
+                <div className="category-content">
+                  <h3>{category.name}</h3>
+                  <p>{category.description}</p>
+                  <div className="category-stats">
+                    <span className="question-count">
                       {category.questions.length} questions
-                    </div>
-                    <div className="card-arrow">→</div>
+                    </span>
                   </div>
                 </div>
-              ))}
+                <div className="category-arrow">→</div>
+              </div>
+            ))}
+          </div>
+          
+          <div className="tips-section">
+            <h3>💡 Interview Tips</h3>
+            <div className="tips-grid">
+              <div className="tip-card">
+                <h4>📚 Research</h4>
+                <p>Learn about the company, its products, culture, and recent news before your interview.</p>
+              </div>
+              <div className="tip-card">
+                <h4>⭐ STAR Method</h4>
+                <p>Structure your answers using Situation, Task, Action, Result for behavioral questions.</p>
+              </div>
+              <div className="tip-card">
+                <h4>❓ Ask Questions</h4>
+                <p>Prepare thoughtful questions about the role, team, and company to show genuine interest.</p>
+              </div>
+              <div className="tip-card">
+                <h4>🎯 Practice</h4>
+                <p>Practice your answers out loud to build confidence and improve your delivery.</p>
+              </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Practice Section */}
-        {activeSection === 'practice' && selectedCategory && (
-          <div className="practice-container">
-            <div className="practice-header">
-              <div className="category-info">
-                <span className="category-icon">{getCurrentCategory().icon}</span>
-                <h2>{getCurrentCategory().name}</h2>
-                <span className="question-counter">
-                  Question {currentQuestionIndex + 1} of {getCurrentCategory().questions.length}
-                </span>
+      {/* Practice Section */}
+      {activeSection === 'practice' && selectedCategory && (
+        <div className="practice-section">
+          <div className="practice-header">
+            <button onClick={goBackToCategories} className="back-btn">
+              ← Back to Categories
+            </button>
+            <div className="category-info">
+              <h2>
+                {questionCategories[selectedCategory].icon} {questionCategories[selectedCategory].name}
+              </h2>
+              <p>Question {currentQuestionIndex + 1} of {questionCategories[selectedCategory].questions.length}</p>
+            </div>
+            <div className="timer-section">
+              <div className="timer-display">
+                <span className="timer-icon">⏱️</span>
+                <span className="timer-time">{formatTime(timer)}</span>
               </div>
-              
               <div className="timer-controls">
-                <div className="timer-display">
-                  <span className="timer-icon">⏱️</span>
-                  <span className="timer-time">{formatTime(timer)}</span>
-                </div>
-                <div className="timer-buttons">
-                  {!isTimerRunning ? (
-                    <button className="btn-secondary" onClick={startTimer}>Start Timer</button>
-                  ) : (
-                    <button className="btn-secondary" onClick={stopTimer}>Pause Timer</button>
-                  )}
-                  <button className="btn-secondary" onClick={resetTimer}>Reset</button>
-                </div>
-              </div>
-            </div>
-
-            <div className="question-section">
-              <div className="question-card">
-                <h3>Interview Question:</h3>
-                <p className="question-text">{getCurrentQuestion()}</p>
-              </div>
-
-              <div className="answer-section">
-                <label htmlFor="userAnswer">Your Answer:</label>
-                <textarea
-                  id="userAnswer"
-                  value={userAnswer}
-                  onChange={(e) => setUserAnswer(e.target.value)}
-                  placeholder="Practice your answer here... Remember to use the STAR method for behavioral questions (Situation, Task, Action, Result)"
-                  rows="10"
-                />
-              </div>
-
-              <div className="navigation-controls">
-                <button 
-                  className="btn-secondary" 
-                  onClick={previousQuestion}
-                  disabled={currentQuestionIndex === 0}
-                >
-                  ← Previous Question
-                </button>
-                
-                <button className="btn-primary" onClick={() => saveCurrentPractice()}>
-                  💾 Save Practice
-                </button>
-                
-                <button 
-                  className="btn-secondary" 
-                  onClick={nextQuestion}
-                  disabled={currentQuestionIndex === getCurrentCategory().questions.length - 1}
-                >
-                  Next Question →
+                {!isTimerRunning ? (
+                  <button onClick={startTimer} className="timer-btn start">
+                    ▶️ Start
+                  </button>
+                ) : (
+                  <button onClick={stopTimer} className="timer-btn stop">
+                    ⏸️ Pause
+                  </button>
+                )}
+                <button onClick={resetTimer} className="timer-btn reset">
+                  🔄 Reset
                 </button>
               </div>
             </div>
           </div>
-        )}
 
-        {/* Tips Section */}
-        {activeSection === 'tips' && (
-          <div className="tips-container">
-            <div className="section-header">
-              <h2>Interview Success Tips</h2>
-              <p>Essential strategies to help you succeed in your interviews</p>
+          <div className="question-container">
+            <div className="question-card">
+              <h3>Interview Question:</h3>
+              <p className="question-text">
+                {questionCategories[selectedCategory].questions[currentQuestionIndex]}
+              </p>
             </div>
             
-            <div className="tips-grid">
-              {interviewTips.map((tip, index) => (
-                <div key={index} className="tip-card">
-                  <div className="tip-icon">{tip.icon}</div>
-                  <h3 className="tip-title">{tip.title}</h3>
-                  <p className="tip-description">{tip.description}</p>
+            <div className="answer-section">
+              <h3>Your Answer:</h3>
+              <textarea
+                value={userAnswer}
+                onChange={(e) => {
+                  setUserAnswer(e.target.value);
+                  if (error) setError('');
+                }}
+                placeholder="Type your answer here. Think about specific examples and use the STAR method for behavioral questions..."
+                rows="10"
+                className="answer-textarea"
+              />
+              
+              <div className="practice-actions">
+                <div className="navigation-buttons">
+                  <button 
+                    onClick={prevQuestion}
+                    disabled={currentQuestionIndex === 0}
+                    className="nav-btn prev"
+                  >
+                    ← Previous Question
+                  </button>
+                  <button 
+                    onClick={nextQuestion}
+                    disabled={currentQuestionIndex === questionCategories[selectedCategory].questions.length - 1}
+                    className="nav-btn next"
+                  >
+                    Next Question →
+                  </button>
                 </div>
-              ))}
+                
+                <button 
+                  onClick={saveAnswer}
+                  className="save-answer-btn"
+                  disabled={isSaving || !userAnswer.trim()}
+                >
+                  {isSaving ? '💾 Saving...' : '💾 Save Answer'}
+                </button>
+              </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* History Section */}
-        {activeSection === 'history' && (
-          <div className="history-container">
-            <div className="section-header">
-              <h2>Practice History</h2>
-              <p>Review your previous practice sessions</p>
+      {/* History Section */}
+      {activeSection === 'history' && (
+        <div className="history-section">
+          <div className="history-header">
+            <h2>📊 Practice History</h2>
+            <div className="history-actions">
               {practiceHistory.length > 0 && (
-                <button className="btn-secondary" onClick={clearHistory}>
+                <button onClick={clearHistory} className="clear-history-btn">
                   🗑️ Clear History
                 </button>
               )}
             </div>
-            
+          </div>
+
+          {practiceHistory.length > 0 && (
+            <div className="history-stats">
+              <div className="stat-card">
+                <h3>Total Sessions</h3>
+                <p className="stat-number">{practiceHistory.length}</p>
+              </div>
+              <div className="stat-card">
+                <h3>Average Time</h3>
+                <p className="stat-number">
+                  {formatTime(Math.round(practiceHistory.reduce((acc, p) => acc + p.timeTaken, 0) / practiceHistory.length))}
+                </p>
+              </div>
+              <div className="stat-card">
+                <h3>Categories Practiced</h3>
+                <p className="stat-number">
+                  {new Set(practiceHistory.map(p => p.category)).size}
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="history-list">
             {practiceHistory.length === 0 ? (
               <div className="no-history">
-                <h3>No Practice History Yet</h3>
-                <p>Start practicing questions to see your history here!</p>
-                <button className="btn-primary" onClick={() => setActiveSection('categories')}>
-                  📚 Start Practicing
+                <div className="no-history-icon">📋</div>
+                <h3>No Practice History</h3>
+                <p>Start practicing interview questions to build your history and track your progress.</p>
+                <button onClick={() => setActiveSection('categories')} className="start-practicing-btn">
+                  🎯 Start Practicing
                 </button>
               </div>
             ) : (
-              <div className="history-list">
-                {practiceHistory.map((practice) => (
-                  <div key={practice.id} className="history-item">
-                    <div className="history-header">
-                      <span className="history-category">
-                        {questionCategories[practice.category].icon} {questionCategories[practice.category].name}
-                      </span>
-                      <span className="history-date">{practice.date}</span>
-                      <span className="history-time">⏱️ {formatTime(practice.timeSpent)}</span>
+              <div className="history-items">
+                {practiceHistory.map((practice, index) => (
+                  <div key={index} className="history-item">
+                    <div className="practice-meta">
+                      <div className="practice-info">
+                        <span className="category-badge">
+                          {questionCategories[practice.category]?.icon} {questionCategories[practice.category]?.name}
+                        </span>
+                        <span className="practice-date">
+                          {new Date(practice.sessionDate).toLocaleDateString()} at {new Date(practice.sessionDate).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <div className="practice-stats">
+                        <span className="time-taken">⏱️ {formatTime(practice.timeTaken)}</span>
+                      </div>
                     </div>
-                    <div className="history-question">
-                      <strong>Q:</strong> {practice.question}
-                    </div>
-                    <div className="history-answer">
-                      <strong>A:</strong> {practice.answer.substring(0, 200)}
-                      {practice.answer.length > 200 && '...'}
+                    
+                    <div className="practice-content">
+                      <div className="practice-question">
+                        <h4>Question:</h4>
+                        <p>{practice.question}</p>
+                      </div>
+                      
+                      <div className="practice-answer">
+                        <h4>Your Answer:</h4>
+                        <p>{practice.userAnswer}</p>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
-        )}
-      </main>
+        </div>
+      )}
     </div>
   );
 }
